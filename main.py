@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 data = DbDispatcher('data.db')
-ADD_RECORD_FORM = {'income': 0, 'tag': 0, 'description': '', 'sum': 0}
+ADD_RECORD_FORM = {'income': 0, 'tag_id': 0, 'description': '', 'sum': 0, 'date': ''}
 ADD_TAG_FORM = {'income': 0, 'name': ''}
 
 
@@ -45,7 +45,7 @@ async def get_income(message: types.Message):
 
 @dp.message_handler(state=AddRecord.tag)
 async def get_tag(message: types.Message):
-    ADD_RECORD_FORM['tag'] = message.text
+    ADD_RECORD_FORM['tag_id'] = message.text
     await AddRecord.description.set()
     await message.answer('Добавьте описание')
 
@@ -63,9 +63,13 @@ async def get_num(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer('Запись успешно добавлена')
     await message.answer(f'income: {ADD_RECORD_FORM["income"]}\n'
-                         f'tag: {ADD_RECORD_FORM["tag"]}\n'
+                         f'tag: {ADD_RECORD_FORM["tag_id"]}\n'
                          f'description: {ADD_RECORD_FORM["description"]}\n'
                          f'sum: {ADD_RECORD_FORM["sum"]}')
+    tag_id = data.select_data({'name': ADD_RECORD_FORM['tag_id']}, 'tags', ['id'])[0][0]
+    ADD_RECORD_FORM['tag_id'] = tag_id
+    ADD_RECORD_FORM['date'] = str(datetime.now())
+    data.write_data(ADD_RECORD_FORM, 'records')
 
 
 @dp.message_handler(commands=['add_tag'])
@@ -88,6 +92,7 @@ async def get_name(message: types.Message, state: FSMContext):
     await message.answer('Категория успешно добавлена')
     await message.answer(f'income: {ADD_TAG_FORM["income"]}\n'
                          f'name: {ADD_TAG_FORM["name"]}')
+    data.write_data(ADD_TAG_FORM, 'tags')
 
 
 async def shutdown(dispatcher: Dispatcher):
