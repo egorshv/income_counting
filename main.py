@@ -68,6 +68,28 @@ async def get_num(message: types.Message, state: FSMContext):
                          f'sum: {ADD_RECORD_FORM["sum"]}')
 
 
+@dp.message_handler(commands=['add_tag'])
+async def add_tag(message: types.Message):
+    await AddTag.income.set()
+    await message.answer('Доход или расход?')
+
+
+@dp.message_handler(state=AddTag.income)
+async def get_income(message: types.Message):
+    ADD_TAG_FORM['income'] = int(message.text)
+    await AddTag.name.set()
+    await message.answer('Введите название категории')
+
+
+@dp.message_handler(state=AddTag.name)
+async def get_name(message: types.Message, state: FSMContext):
+    ADD_TAG_FORM['name'] = message.text
+    await state.finish()
+    await message.answer('Категория успешно добавлена')
+    await message.answer(f'income: {ADD_TAG_FORM["income"]}\n'
+                         f'name: {ADD_TAG_FORM["name"]}')
+
+
 async def shutdown(dispatcher: Dispatcher):
     data.close_connection()
     await dispatcher.storage.close()
