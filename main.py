@@ -57,8 +57,12 @@ async def add_record(message: types.Message):
 async def get_income(message: types.Message):
     if message.text == 'Доход':
         ADD_RECORD_FORM['income'] = 1
-    else:
+    elif message.text == 'Расход':
         ADD_RECORD_FORM['income'] = 0
+    else:
+        await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
+                             '/break_record - чтобы прервать запись')
+        await AddRecord.income.set()
     keyboard2 = ReplyKeyboardMarkup(resize_keyboard=True)
     tags = data.select_data({'income': ADD_RECORD_FORM['income']}, 'tags', ['name'])
     for tag in tags:
@@ -69,31 +73,47 @@ async def get_income(message: types.Message):
 
 @dp.message_handler(state=AddRecord.tag)
 async def get_tag(message: types.Message):
-    ADD_RECORD_FORM['tag_id'] = message.text
+    tags = [item[0] for item in data.select_data({'income': ADD_RECORD_FORM['income']}, 'tags', ['name'])]
+    if message.text in tags:
+        ADD_RECORD_FORM['tag_id'] = message.text
+    else:
+        await message.answer('Такого тега не существует.\n'
+                             '/add_tag - чтобы добавить тег\n'
+                             '/break_record - чтобы прервать запись')
+        await AddRecord.tag.set()
     await AddRecord.description.set()
     await message.answer('Добавьте описание', reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message_handler(state=AddRecord.description)
 async def get_description(message: types.Message):
-    ADD_RECORD_FORM['description'] = message.text
-    await AddRecord.num.set()
-    await message.answer('Введите сумму')
+    if message.text.isdigit():
+        await message.answer('Описание не должно быть числом')
+        await AddRecord.description.set()
+    else:
+        ADD_RECORD_FORM['description'] = message.text
+        await AddRecord.num.set()
+        await message.answer('Введите сумму')
 
 
 @dp.message_handler(state=AddRecord.num)
 async def get_num(message: types.Message, state: FSMContext):
-    ADD_RECORD_FORM['sum'] = int(message.text)
-    await state.finish()
-    await message.answer('Запись успешно добавлена')
-    await message.answer(f'income: {ADD_RECORD_FORM["income"]}\n'
-                         f'tag: {ADD_RECORD_FORM["tag_id"]}\n'
-                         f'description: {ADD_RECORD_FORM["description"]}\n'
-                         f'sum: {ADD_RECORD_FORM["sum"]}')
-    tag_id = data.select_data({'name': ADD_RECORD_FORM['tag_id']}, 'tags', ['id'])[0][0]
-    ADD_RECORD_FORM['tag_id'] = tag_id
-    ADD_RECORD_FORM['date'] = str(datetime.now())
-    data.write_data(ADD_RECORD_FORM, 'records')
+    try:
+        ADD_RECORD_FORM['sum'] = int(message.text)
+        ADD_RECORD_FORM['description'] = ADD_RECORD_FORM['description'].replace('\'', '_')
+        await state.finish()
+        await message.answer('Запись успешно добавлена')
+        await message.answer(f'income: {ADD_RECORD_FORM["income"]}\n'
+                             f'tag: {ADD_RECORD_FORM["tag_id"]}\n'
+                             f'description: {ADD_RECORD_FORM["description"]}\n'
+                             f'sum: {ADD_RECORD_FORM["sum"]}')
+        tag_id = data.select_data({'name': ADD_RECORD_FORM['tag_id']}, 'tags', ['id'])[0][0]
+        ADD_RECORD_FORM['tag_id'] = tag_id
+        ADD_RECORD_FORM['date'] = str(datetime.now())
+        data.write_data(ADD_RECORD_FORM, 'records')
+    except ValueError:
+        await message.answer('Необходимо ввести число')
+        await AddRecord.num.set()
 
 
 @dp.message_handler(commands=['add_tag'])
@@ -106,20 +126,34 @@ async def add_tag(message: types.Message):
 async def get_income(message: types.Message):
     if message.text == 'Доход':
         ADD_RECORD_FORM['income'] = 1
-    else:
+    elif message.text == 'Расход':
         ADD_RECORD_FORM['income'] = 0
+    else:
+        await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
+                             '/break_record - чтобы прервать запись')
+        await AddTag.income.set()
     await AddTag.name.set()
     await message.answer('Введите название категории', reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message_handler(state=AddTag.name)
 async def get_name(message: types.Message, state: FSMContext):
-    ADD_TAG_FORM['name'] = message.text
+    if message.text.isdigit():
+        await message.answer('Имя не может быть числом')
+        await AddTag.name.set()
+    else:
+        ADD_TAG_FORM['name'] = message.text
+        await state.finish()
+        await message.answer('Категория успешно добавлена')
+        await message.answer(f'income: {ADD_TAG_FORM["income"]}\n'
+                             f'name: {ADD_TAG_FORM["name"]}')
+        data.write_data(ADD_TAG_FORM, 'tags')
+
+
+@dp.message_handler(commands=['/break_record'])
+async def break_record(message: types.Message, state: FSMContext):
     await state.finish()
-    await message.answer('Категория успешно добавлена')
-    await message.answer(f'income: {ADD_TAG_FORM["income"]}\n'
-                         f'name: {ADD_TAG_FORM["name"]}')
-    data.write_data(ADD_TAG_FORM, 'tags')
+    await message.answer('Запись прервана')
 
 
 async def shutdown(dispatcher: Dispatcher):
