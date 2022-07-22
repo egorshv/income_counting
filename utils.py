@@ -11,3 +11,8 @@ class AddRecord(StatesGroup):
 class AddTag(StatesGroup):
     income = State()
     name = State()
+
+
+class GetStat(StatesGroup):
+    time = State()
+    tag = State()
