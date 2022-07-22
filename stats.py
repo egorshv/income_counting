@@ -4,9 +4,9 @@ from datetime import datetime
 data = DbDispatcher('data.db')
 
 
-def get_stats(time, tag):
+def get_stat(time, tag):
     tag_id = data.select_data({'name': tag}, 'tags', ['id'])[0][0]
-    all_data_by_tag = data.select_data({'tag_id': tag_id}, 'records', ['date', 'sum'])
+    all_data_by_tag = data.select_data({'tag_id': tag_id}, 'records', ['date', 'sum', 'description'])
     d = {'день': 2, 'неделя': 2, 'месяц': 1, 'год': 0}
     k = d[time]
     n = 1
