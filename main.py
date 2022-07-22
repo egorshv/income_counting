@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from config import TOKEN
 from aiogram.dispatcher import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 from utils import AddTag, AddRecord
 from db import DbDispatcher
@@ -18,6 +18,9 @@ dp = Dispatcher(bot, storage=MemoryStorage())
 data = DbDispatcher('data.db')
 ADD_RECORD_FORM = {'income': 0, 'tag_id': 0, 'description': '', 'sum': 0, 'date': ''}
 ADD_TAG_FORM = {'income': 0, 'name': ''}
+keyboard1 = ReplyKeyboardMarkup(resize_keyboard=True)
+keyboard1.add(KeyboardButton('Доход'))
+keyboard1.add(KeyboardButton('Расход'))
 
 
 @dp.message_handler(commands=['start'])
@@ -30,24 +33,45 @@ async def help(message: types.Message):
     await message.answer("List of available functions")
 
 
+@dp.message_handler(commands=['stats'])
+async def get_stats(message: types.Message):
+    pattern = 'Total incoming: {}\n' \
+              'Tag1 incoming: {}\n' \
+              '...\n' \
+              'TagN incoming: {}\n' \
+              'Total spending: {}\n' \
+              'Tag1 spending: {}\n' \
+              '...\n' \
+              'TagN spending: {}\n'
+    # Also need to get stats per some time period
+    pass
+
+
 @dp.message_handler(commands=['add_record'])
 async def add_record(message: types.Message):
     await AddRecord.income.set()
-    await message.answer('Доход или расход?')
+    await message.answer('Доход или расход?', reply_markup=keyboard1)
 
 
 @dp.message_handler(state=AddRecord.income)
 async def get_income(message: types.Message):
-    ADD_RECORD_FORM['income'] = int(message.text)
+    if message.text == 'Доход':
+        ADD_RECORD_FORM['income'] = 1
+    else:
+        ADD_RECORD_FORM['income'] = 0
+    keyboard2 = ReplyKeyboardMarkup(resize_keyboard=True)
+    tags = data.select_data({'income': ADD_RECORD_FORM['income']}, 'tags', ['name'])
+    for tag in tags:
+        keyboard2.add(KeyboardButton(tag[0]))
     await AddRecord.tag.set()
-    await message.answer('Укажите категорию')
+    await message.answer('Укажите категорию', reply_markup=keyboard2)
 
 
 @dp.message_handler(state=AddRecord.tag)
 async def get_tag(message: types.Message):
     ADD_RECORD_FORM['tag_id'] = message.text
     await AddRecord.description.set()
-    await message.answer('Добавьте описание')
+    await message.answer('Добавьте описание', reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message_handler(state=AddRecord.description)
@@ -75,14 +99,17 @@ async def get_num(message: types.Message, state: FSMContext):
 @dp.message_handler(commands=['add_tag'])
 async def add_tag(message: types.Message):
     await AddTag.income.set()
-    await message.answer('Доход или расход?')
+    await message.answer('Доход или расход?', reply_markup=keyboard1)
 
 
 @dp.message_handler(state=AddTag.income)
 async def get_income(message: types.Message):
-    ADD_TAG_FORM['income'] = int(message.text)
+    if message.text == 'Доход':
+        ADD_RECORD_FORM['income'] = 1
+    else:
+        ADD_RECORD_FORM['income'] = 0
     await AddTag.name.set()
-    await message.answer('Введите название категории')
+    await message.answer('Введите название категории', reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message_handler(state=AddTag.name)
