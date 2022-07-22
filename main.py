@@ -8,8 +8,9 @@ from config import TOKEN
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
-from utils import AddTag, AddRecord
+from utils import AddTag, AddRecord, GetStat
 from db import DbDispatcher
+from stats import get_stat
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,9 +19,14 @@ dp = Dispatcher(bot, storage=MemoryStorage())
 data = DbDispatcher('data.db')
 ADD_RECORD_FORM = {'income': 0, 'tag_id': 0, 'description': '', 'sum': 0, 'date': ''}
 ADD_TAG_FORM = {'income': 0, 'name': ''}
+STATS_FORM = {'time': '', 'tag': ''}
 keyboard1 = ReplyKeyboardMarkup(resize_keyboard=True)
 keyboard1.add(KeyboardButton('Доход'))
 keyboard1.add(KeyboardButton('Расход'))
+time_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+lst = ['день', 'неделя', 'месяц', 'год']
+for item in lst:
+    time_keyboard.add(KeyboardButton(item))
 
 
 @dp.message_handler(commands=['start'])
@@ -44,7 +50,40 @@ async def get_stats(message: types.Message):
               '...\n' \
               'TagN spending: {}\n'
     # Also need to get stats per some time period
-    pass
+    await GetStat.time.set()
+    await message.answer('Выберете временной период', reply_markup=time_keyboard)
+
+
+@dp.message_handler(state=GetStat.time)
+async def get_time(message: types.Message):
+    if message.text not in lst:
+        await message.answer('Неверный временной период, попробуйте ещё раз.')
+        await GetStat.time.set()
+    else:
+        STATS_FORM['time'] = message.text
+        tags_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+        tags = data.select_data({}, 'tags', ['name'])
+        for tag in tags:
+            tags_keyboard.add(KeyboardButton(tag[0]))
+        await GetStat.tag.set()
+        await message.answer('Введите тег, по которому нужна статистика', reply_markup=tags_keyboard)
+
+
+@dp.message_handler(state=GetStat.tag)
+async def get_tag(message: types.Message, state: FSMContext):
+    tags = [item[0] for item in data.select_data({}, 'tags', ['name'])]
+    if message.text not in tags:
+        await message.answer('Такого тега нет')
+        await GetStat.tag.set()
+    else:
+        stats = get_stat(STATS_FORM['time'], message.text)
+        pattern = '{} : {} : {}'
+        line = []
+        for record in stats[0]:
+            line.append(pattern.format(record[0].split()[0], record[2], record[1]))
+        line.append(f'Общая сумма: {stats[1]}')
+        await state.finish()
+        await message.answer('\n'.join(line), reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message_handler(commands=['add_record'])
