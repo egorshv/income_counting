@@ -16,3 +16,8 @@ class AddTag(StatesGroup):
 class GetStat(StatesGroup):
     time = State()
     tag = State()
+
+
+class GetPlot(StatesGroup):
+    income = State()
+    time = State()
