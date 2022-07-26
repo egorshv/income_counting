@@ -8,9 +8,9 @@ from config import TOKEN
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
-from utils import AddTag, AddRecord, GetStat
+from utils import AddTag, AddRecord, GetStat, GetPlot
 from db import DbDispatcher
-from stats import get_stat
+from stats import get_stat, get_plot
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,6 +20,7 @@ data = DbDispatcher('data.db')
 ADD_RECORD_FORM = {'income': 0, 'tag_id': 0, 'description': '', 'sum': 0, 'date': ''}
 ADD_TAG_FORM = {'income': 0, 'name': ''}
 STATS_FORM = {'time': '', 'tag': ''}
+GET_PLOT_FORM = {'time': '', 'income': 0}
 keyboard1 = ReplyKeyboardMarkup(resize_keyboard=True)
 keyboard1.add(KeyboardButton('Доход'))
 keyboard1.add(KeyboardButton('Расход'))
@@ -187,6 +188,39 @@ async def get_name(message: types.Message, state: FSMContext):
         await message.answer(f'income: {ADD_TAG_FORM["income"]}\n'
                              f'name: {ADD_TAG_FORM["name"]}')
         data.write_data(ADD_TAG_FORM, 'tags')
+
+
+@dp.message_handler(commands=['get_plot'])
+async def get_plt(message: types.Message):
+    await message.answer('Доход или расход?', reply_markup=keyboard1)
+    await GetPlot.income.set()
+
+
+@dp.message_handler(state=GetPlot.income)
+async def get_inc(message: types.Message):
+    if message.text == 'Доход':
+        GET_PLOT_FORM['income'] = 1
+    elif message.text == 'Расход':
+        GET_PLOT_FORM['income'] = 0
+    else:
+        await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
+                             '/break_record - чтобы прервать запись')
+        await GetPlot.income.set()
+    await message.answer('Выберете временной период', reply_markup=time_keyboard)
+    await GetPlot.time.set()
+
+
+@dp.message_handler(state=GetPlot.time)
+async def get_tm(message: types.Message, state: FSMContext):
+    if message.text not in lst:
+        await message.answer('Неверный временной период, попробуйте ещё раз.')
+        await GetPlot.time.set()
+    else:
+        GET_PLOT_FORM['time'] = message.text
+        get_plot('plot1.png', GET_PLOT_FORM['time'], GET_PLOT_FORM['income'])
+        chat_id = message.chat.id
+        await bot.send_photo(chat_id=chat_id, photo=open('plot1.png', 'rb'), reply_markup=ReplyKeyboardRemove())
+        await state.finish()
 
 
 @dp.message_handler(commands=['/break_record'])
