@@ -164,9 +164,9 @@ async def add_tag(message: types.Message):
 @dp.message_handler(state=AddTag.income)
 async def get_income(message: types.Message):
     if message.text == 'Доход':
-        ADD_RECORD_FORM['income'] = 1
+        ADD_TAG_FORM['income'] = 1
     elif message.text == 'Расход':
-        ADD_RECORD_FORM['income'] = 0
+        ADD_TAG_FORM['income'] = 0
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
                              '/break_record - чтобы прервать запись')
