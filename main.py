@@ -1,30 +1,24 @@
 import logging
-
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher.filters import Text
-
-from config import TOKEN
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Text
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
-from utils import AddTag, AddRecord, GetStat, GetPlot
+from config import TOKEN
 from db import DbDispatcher
 from stats import get_stat, get_plot
+from utils import AddTag, AddRecord, GetStat, GetPlot, GetRecordsByTag, GetRecordsByTime
 
 logging.basicConfig(level=logging.INFO)
 
-# state.update_data(some_name=message.text.lower())
+# TODO: get total sum by tag
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 data = DbDispatcher('data.db')
-# ADD_RECORD_FORM = {'income': 0, 'tag_id': 0, 'description': '', 'sum': 0, 'date': ''}
-# ADD_TAG_FORM = {'income': 0, 'name': ''}
-# STATS_FORM = {'time': '', 'tag': ''}
-# GET_PLOT_FORM = {'time': '', 'income': 0}
 keyboard1 = ReplyKeyboardMarkup(resize_keyboard=True)
 keyboard1.add(KeyboardButton('Доход'))
 keyboard1.add(KeyboardButton('Расход'))
@@ -78,10 +72,8 @@ async def get_stats(message: types.Message):
 async def get_time(message: types.Message, state: FSMContext):
     if message.text not in lst:
         await message.answer('Неверный временной период, попробуйте ещё раз.')
-        # await GetStat.time.set()
         return
     else:
-        # STATS_FORM['time'] = message.text
         await state.update_data(time=message.text)
         tags_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
         tags = data.select_data({}, 'tags', ['name'])
@@ -96,7 +88,6 @@ async def get_tag(message: types.Message, state: FSMContext):
     tags = [item[0] for item in data.select_data({}, 'tags', ['name'])]
     if message.text not in tags:
         await message.answer('Такого тега нет')
-        # await GetStat.tag.set()
         return
     else:
         async with state.proxy() as d:
@@ -119,15 +110,12 @@ async def add_record(message: types.Message):
 @dp.message_handler(state=AddRecord.income)
 async def get_income(message: types.Message, state: FSMContext):
     if message.text == 'Доход':
-        # ADD_RECORD_FORM['income'] = 1
         await state.update_data(income=1)
     elif message.text == 'Расход':
-        # ADD_RECORD_FORM['income'] = 0
         await state.update_data(income=0)
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
-                             '/break_record - чтобы прервать запись')
-        # await AddRecord.income.set()
+                             '/cancel - чтобы прервать запись')
         return
     keyboard2 = ReplyKeyboardMarkup(resize_keyboard=True)
     async with state.proxy() as d:
@@ -143,13 +131,11 @@ async def get_tag(message: types.Message, state: FSMContext):
     async with state.proxy() as d:
         tags = [item[0] for item in data.select_data({'income': d['income']}, 'tags', ['name'])]
     if message.text in tags:
-        # ADD_RECORD_FORM['tag_id'] = message.text
         await state.update_data(tag_id=message.text)
     else:
         await message.answer('Такого тега не существует.\n'
                              '/add_tag - чтобы добавить тег\n'
-                             '/break_record - чтобы прервать запись')
-        # await AddRecord.tag.set()
+                             '/cancel - чтобы прервать запись')
         return
     await AddRecord.description.set()
     await message.answer('Добавьте описание', reply_markup=ReplyKeyboardRemove())
@@ -159,10 +145,8 @@ async def get_tag(message: types.Message, state: FSMContext):
 async def get_description(message: types.Message, state: FSMContext):
     if message.text.isdigit():
         await message.answer('Описание не должно быть числом')
-        # await AddRecord.description.set()
         return
     else:
-        # ADD_RECORD_FORM['description'] = message.text
         await state.update_data(description=message.text)
         await AddRecord.num.set()
         await message.answer('Введите сумму')
@@ -171,7 +155,6 @@ async def get_description(message: types.Message, state: FSMContext):
 @dp.message_handler(state=AddRecord.num)
 async def get_num(message: types.Message, state: FSMContext):
     try:
-        # ADD_RECORD_FORM['sum'] = int(message.text)
         await state.update_data(sum=int(message.text))
         async with state.proxy() as d:
             dct = dict(d)
@@ -188,7 +171,6 @@ async def get_num(message: types.Message, state: FSMContext):
         await state.finish()
     except ValueError:
         await message.answer('Необходимо ввести число')
-        # await AddRecord.num.set()
         return
 
 
@@ -201,15 +183,12 @@ async def add_tag(message: types.Message):
 @dp.message_handler(state=AddTag.income)
 async def get_income(message: types.Message, state: FSMContext):
     if message.text == 'Доход':
-        # ADD_TAG_FORM['income'] = 1
         await state.update_data(income=1)
     elif message.text == 'Расход':
-        # ADD_TAG_FORM['income'] = 0
         await state.update_data(income=0)
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
-                             '/break_record - чтобы прервать запись')
-        # await AddTag.income.set()
+                             '/cancel - чтобы прервать запись')
         return
     await AddTag.name.set()
     await message.answer('Введите название категории', reply_markup=ReplyKeyboardRemove())
@@ -219,10 +198,8 @@ async def get_income(message: types.Message, state: FSMContext):
 async def get_name(message: types.Message, state: FSMContext):
     if message.text.isdigit():
         await message.answer('Имя не может быть числом')
-        # await AddTag.name.set()
         return
     else:
-        # ADD_TAG_FORM['name'] = message.text
         await state.update_data(name=message.text)
         async with state.proxy() as d:
             dct = dict(d)
@@ -242,15 +219,12 @@ async def get_plt(message: types.Message):
 @dp.message_handler(state=GetPlot.income)
 async def get_inc(message: types.Message, state: FSMContext):
     if message.text == 'Доход':
-        # GET_PLOT_FORM['income'] = 1
         await state.update_data(income=1)
     elif message.text == 'Расход':
-        # GET_PLOT_FORM['income'] = 0
         await state.update_data(income=0)
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
-                             '/break_record - чтобы прервать запись')
-        # await GetPlot.income.set()
+                             '/cancel - чтобы прервать запись')
         return
     await message.answer('Выберете временной период', reply_markup=time_keyboard)
     await GetPlot.time.set()
@@ -260,16 +234,85 @@ async def get_inc(message: types.Message, state: FSMContext):
 async def get_tm(message: types.Message, state: FSMContext):
     if message.text not in lst:
         await message.answer('Неверный временной период, попробуйте ещё раз.')
-        # await GetPlot.time.set()
         return
     else:
-        # GET_PLOT_FORM['time'] = message.text
         await state.update_data(time=message.text)
         async with state.proxy() as d:
             get_plot('plot1.png', d['time'], d['income'])
         chat_id = message.chat.id
         await bot.send_photo(chat_id=chat_id, photo=open('plot1.png', 'rb'), reply_markup=ReplyKeyboardRemove())
         await state.finish()
+
+
+@dp.message_handler(commands=['get_records_by_tag'])
+async def get_records_by_tag(message: types.Message):
+    tags = data.select_data({}, 'tags', ['name'])
+    tag_keyboard = ReplyKeyboardMarkup()
+    for tag in tags:
+        tag_keyboard.add(KeyboardButton(tag[0]))
+    await GetRecordsByTag.tag.set()
+    await message.answer('Введите необходимый тег', reply_markup=tag_keyboard)
+
+
+@dp.message_handler(state=GetRecordsByTag.tag)
+async def gt_tag(message: types.Message, state: FSMContext):
+    tags = [item[0] for item in data.select_data({}, 'tags', ['name'])]
+    if message.text in tags:
+        await state.update_data(tag=message.text)
+        async with state.proxy() as d:
+            tag_id = data.select_data({'name': d['tag']}, 'tags', ['id'])[0][0]
+        records = data.select_data({'tag_id': tag_id}, 'records', ['description', 'date', 'sum'])
+        res = []
+        for record in records:
+            res.append(f'{record[1]} : {record[0]} : {record[2]}')
+        await message.answer('\n'.join(res), reply_markup=ReplyKeyboardRemove())
+        await state.finish()
+    else:
+        await message.answer('Такого тега не существует.\n'
+                             '/add_tag - чтобы добавить тег\n'
+                             '/cancel - чтобы прервать запись')
+        return
+
+
+@dp.message_handler(commands=['get_records_by_time'])
+async def get_records_by_time(message: types.Message):
+    await GetRecordsByTime.time.set()
+    await message.answer('Выберете временной период', reply_markup=time_keyboard)
+
+
+@dp.message_handler(state=GetRecordsByTime.time)
+async def gt_time(message: types.Message, state: FSMContext):
+    if message.text in lst:
+        await state.update_data(time=message.text)
+        async with state.proxy() as dct:
+            time = dct['time']
+        all_data = data.select_data({}, 'records', ['description', 'date', 'sum'])
+        d = {'день': 2, 'неделя': 2, 'месяц': 1, 'год': 0}
+        k = d[time]
+        n = 1
+        now = str(datetime.now()).split('-')
+        now[2] = now[2].split()[0]
+        now = now[k]
+        if time == 'неделя':
+            n = 7
+        result = []
+        for item in all_data:
+            time_data = item[1].split('-')
+            time_data[2] = time_data[2].split()[0]
+            time_data = time_data[k]
+            if int(now) - int(time_data) <= n:
+                result.append(item)
+        res = []
+        for record in result:
+            res.append(f'{record[1]} : {record[0]} : {record[2]}')
+        if len(res) > 0:
+            await message.answer('\n'.join(res), reply_markup=ReplyKeyboardRemove())
+        else:
+            await message.answer('За указанный период записи не найдены')
+        await state.finish()
+    else:
+        await message.answer('Неверный временной период, попробуйте ещё раз.')
+        return
 
 
 async def shutdown(dispatcher: Dispatcher):
