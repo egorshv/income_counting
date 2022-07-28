@@ -29,7 +29,12 @@ def get_stat(time, tag):
 def get_plot(filename, time, income):
     labels = data.select_data({}, 'tags', ['id', 'name', 'income'])
     _labels = list(filter(lambda x: x[2] == income, labels))
-    names = [item[1] for item in _labels]
+    lbs = []
+    for lb in _labels:
+        records = data.select_data({'tag_id': lb[0]}, 'records')
+        if len(records) > 0:
+           lbs.append(lb)
+    names = [item[1] for item in lbs]
     _data = []
     for label in names:
         s = get_stat(time, label)
