@@ -4,6 +4,8 @@ from datetime import datetime
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher.filters import Text
+
 from config import TOKEN
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
@@ -13,6 +15,22 @@ from db import DbDispatcher
 from stats import get_stat, get_plot
 
 logging.basicConfig(level=logging.INFO)
+
+# state.update_data(some_name=message.text.lower())
+# Таким способом можно переписать сохранение данных и избавиться от словарей
+
+
+# Регистрация команд, отображаемых в интерфейсе Telegram
+# async def set_commands(bot: Bot):
+#     commands = [
+#         BotCommand(command="/drinks", description="Заказать напитки"),
+#         BotCommand(command="/food", description="Заказать блюда"),
+#         BotCommand(command="/cancel", description="Отменить текущее действие")
+#     ]
+#     await bot.set_my_commands(commands)
+
+# В if main ... : await set_commands(bot)
+
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
@@ -32,25 +50,40 @@ for item in lst:
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await message.answer("Some greeting text")
+    await message.answer('Привет, это бот для учёта доходов/расходов.\n'
+                         '/help - чтобы посмотреть все функции')
 
 
 @dp.message_handler(commands=['help'])
 async def help(message: types.Message):
-    await message.answer("List of available functions")
+    await message.answer('/add_record - добавить новую запись\n'
+                         '/add_tag - добавить новую категорию\n'
+                         '/stats - получить статистику\n'
+                         '/get_plot - получить круговую диаграмму\n'
+                         '/cancel - прервать запись\n'
+                         '/get_records_by_tag - получить все записи по опр. категории\n'
+                         '/get_records_by_time - получить все записи за опр. период времени')
+
+
+@dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(Text(equals='cancel', ignore_case=True), state='*')
+async def cancel_handler(message: types.Message, state: FSMContext):
+    """
+    Allow user to cancel any action
+    """
+    current_state = await state.get_state()
+    if current_state is None:
+        return
+
+    logging.info('Cancelling state %r', current_state)
+    # Cancel state and inform user about it
+    await state.finish()
+    # And remove keyboard (just in case)
+    await message.reply('Отменено', reply_markup=types.ReplyKeyboardRemove())
 
 
 @dp.message_handler(commands=['stats'])
 async def get_stats(message: types.Message):
-    pattern = 'Total incoming: {}\n' \
-              'Tag1 incoming: {}\n' \
-              '...\n' \
-              'TagN incoming: {}\n' \
-              'Total spending: {}\n' \
-              'Tag1 spending: {}\n' \
-              '...\n' \
-              'TagN spending: {}\n'
-    # Also need to get stats per some time period
     await GetStat.time.set()
     await message.answer('Выберете временной период', reply_markup=time_keyboard)
 
@@ -59,7 +92,8 @@ async def get_stats(message: types.Message):
 async def get_time(message: types.Message):
     if message.text not in lst:
         await message.answer('Неверный временной период, попробуйте ещё раз.')
-        await GetStat.time.set()
+        # await GetStat.time.set()
+        return
     else:
         STATS_FORM['time'] = message.text
         tags_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -75,7 +109,8 @@ async def get_tag(message: types.Message, state: FSMContext):
     tags = [item[0] for item in data.select_data({}, 'tags', ['name'])]
     if message.text not in tags:
         await message.answer('Такого тега нет')
-        await GetStat.tag.set()
+        # await GetStat.tag.set()
+        return
     else:
         stats = get_stat(STATS_FORM['time'], message.text)
         pattern = '{} : {} : {}'
@@ -102,7 +137,8 @@ async def get_income(message: types.Message):
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
                              '/break_record - чтобы прервать запись')
-        await AddRecord.income.set()
+        # await AddRecord.income.set()
+        return
     keyboard2 = ReplyKeyboardMarkup(resize_keyboard=True)
     tags = data.select_data({'income': ADD_RECORD_FORM['income']}, 'tags', ['name'])
     for tag in tags:
@@ -120,7 +156,8 @@ async def get_tag(message: types.Message):
         await message.answer('Такого тега не существует.\n'
                              '/add_tag - чтобы добавить тег\n'
                              '/break_record - чтобы прервать запись')
-        await AddRecord.tag.set()
+        # await AddRecord.tag.set()
+        return
     await AddRecord.description.set()
     await message.answer('Добавьте описание', reply_markup=ReplyKeyboardRemove())
 
@@ -129,7 +166,8 @@ async def get_tag(message: types.Message):
 async def get_description(message: types.Message):
     if message.text.isdigit():
         await message.answer('Описание не должно быть числом')
-        await AddRecord.description.set()
+        # await AddRecord.description.set()
+        return
     else:
         ADD_RECORD_FORM['description'] = message.text
         await AddRecord.num.set()
@@ -153,7 +191,8 @@ async def get_num(message: types.Message, state: FSMContext):
         data.write_data(ADD_RECORD_FORM, 'records')
     except ValueError:
         await message.answer('Необходимо ввести число')
-        await AddRecord.num.set()
+        # await AddRecord.num.set()
+        return
 
 
 @dp.message_handler(commands=['add_tag'])
@@ -171,7 +210,8 @@ async def get_income(message: types.Message):
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
                              '/break_record - чтобы прервать запись')
-        await AddTag.income.set()
+        # await AddTag.income.set()
+        return
     await AddTag.name.set()
     await message.answer('Введите название категории', reply_markup=ReplyKeyboardRemove())
 
@@ -180,7 +220,8 @@ async def get_income(message: types.Message):
 async def get_name(message: types.Message, state: FSMContext):
     if message.text.isdigit():
         await message.answer('Имя не может быть числом')
-        await AddTag.name.set()
+        # await AddTag.name.set()
+        return
     else:
         ADD_TAG_FORM['name'] = message.text
         await state.finish()
@@ -205,7 +246,8 @@ async def get_inc(message: types.Message):
     else:
         await message.answer('Неверный формат ввода, попробуйте ещё раз\n'
                              '/break_record - чтобы прервать запись')
-        await GetPlot.income.set()
+        # await GetPlot.income.set()
+        return
     await message.answer('Выберете временной период', reply_markup=time_keyboard)
     await GetPlot.time.set()
 
@@ -214,19 +256,14 @@ async def get_inc(message: types.Message):
 async def get_tm(message: types.Message, state: FSMContext):
     if message.text not in lst:
         await message.answer('Неверный временной период, попробуйте ещё раз.')
-        await GetPlot.time.set()
+        # await GetPlot.time.set()
+        return
     else:
         GET_PLOT_FORM['time'] = message.text
         get_plot('plot1.png', GET_PLOT_FORM['time'], GET_PLOT_FORM['income'])
         chat_id = message.chat.id
         await bot.send_photo(chat_id=chat_id, photo=open('plot1.png', 'rb'), reply_markup=ReplyKeyboardRemove())
         await state.finish()
-
-
-@dp.message_handler(commands=['/break_record'])
-async def break_record(message: types.Message, state: FSMContext):
-    await state.finish()
-    await message.answer('Запись прервана')
 
 
 async def shutdown(dispatcher: Dispatcher):
