@@ -21,3 +21,11 @@ class GetStat(StatesGroup):
 class GetPlot(StatesGroup):
     income = State()
     time = State()
+
+
+class GetRecordsByTag(StatesGroup):
+    tag = State()
+
+
+class GetRecordsByTime(StatesGroup):
+    time = State()
