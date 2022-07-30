@@ -8,20 +8,15 @@ data = DbDispatcher('data.db')
 def get_stat(time, tag):
     tag_id = data.select_data({'name': tag}, 'tags', ['id'])[0][0]
     all_data_by_tag = data.select_data({'tag_id': tag_id}, 'records', ['date', 'sum', 'description'])
-    d = {'день': 2, 'неделя': 2, 'месяц': 1, 'год': 0}
-    k = d[time]
-    n = 1
-    now = str(datetime.now()).split('-')
-    now[2] = now[2].split()[0]
-    now = now[k]
-    if time == 'неделя':
-        n = 7
+    d = {'день': 1, 'неделя': 7, 'месяц': 31, 'год': 365}
+    n = d[time]
+    now = datetime.now()
     result = []
     for item in all_data_by_tag:
-        time_data = item[0].split('-')
-        time_data[2] = time_data[2].split()[0]
-        time_data = time_data[k]
-        if int(now) - int(time_data) <= n:
+        time_data = item[0].split('.')[0]
+        time_data = datetime.strptime(time_data, '%Y-%m-%d %H:%M:%S')
+        diff = now - time_data
+        if diff.days < n:
             result.append(item)
     return result, sum([item[1] for item in result])
 

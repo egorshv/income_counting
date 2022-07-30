@@ -14,8 +14,6 @@ from utils import AddTag, AddRecord, GetStat, GetPlot, GetRecordsByTag, GetRecor
 
 logging.basicConfig(level=logging.INFO)
 
-# TODO: get total sum by tag
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 data = DbDispatcher('data.db')
@@ -42,7 +40,8 @@ async def help(message: types.Message):
                          '/get_plot - получить круговую диаграмму\n'
                          '/cancel - прервать запись\n'
                          '/get_records_by_tag - получить все записи по опр. категории\n'
-                         '/get_records_by_time - получить все записи за опр. период времени')
+                         '/get_records_by_time - получить все записи за опр. период времени\n'
+                         '/get_sum_by_tag - получить сумму по тегу')
 
 
 @dp.message_handler(state='*', commands='cancel')
@@ -287,20 +286,15 @@ async def gt_time(message: types.Message, state: FSMContext):
         async with state.proxy() as dct:
             time = dct['time']
         all_data = data.select_data({}, 'records', ['description', 'date', 'sum'])
-        d = {'день': 2, 'неделя': 2, 'месяц': 1, 'год': 0}
-        k = d[time]
-        n = 1
-        now = str(datetime.now()).split('-')
-        now[2] = now[2].split()[0]
-        now = now[k]
-        if time == 'неделя':
-            n = 7
+        d = {'день': 1, 'неделя': 7, 'месяц': 31, 'год': 365}
+        n = d[time]
+        now = datetime.now()
         result = []
         for item in all_data:
-            time_data = item[1].split('-')
-            time_data[2] = time_data[2].split()[0]
-            time_data = time_data[k]
-            if int(now) - int(time_data) <= n:
+            time_data = item[1].split('.')[0]
+            time_data = datetime.strptime(time_data, '%Y-%m-%d %H:%M:%S')
+            diff = now - time_data
+            if diff.days < n:
                 result.append(item)
         res = []
         for record in result:
